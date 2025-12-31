@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <title>Easy Go | Track Order</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: 400px; border-radius: 1rem; }
+        .tracking-step { transition: all 0.3s; }
+        .tracking-step.active { background-color: #10b981; color: white; }
+        .tracking-step.completed { background-color: #059669; color: white; }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="antialiased bg-gray-50">
+
+    <header class="relative mb-8">
+        <div class="h-40 overflow-hidden">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/Banner.png" 
+                 class="w-full h-full object-cover" alt="Easy Go Banner">
+        </div>
+        <div class="absolute -bottom-6 left-0 right-0 flex justify-center">
+            <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                 class="h-20 w-20 rounded-full border-4 border-white shadow-xl bg-white p-1">
+        </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto px-4 pt-10 pb-20">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-black uppercase mb-4">Track Your Order</h1>
+            <p class="text-gray-600">Real-time updates on your order status</p>
+        </div>
+        
+        <!-- Order Status Badge -->
+        <div class="mb-8 text-center">
+            <div id="order-status-badge" class="inline-flex items-center gap-2 px-6 py-3 bg-yellow-100 text-yellow-800 rounded-full">
+                <i class="fas fa-clock"></i>
+                <span class="font-bold">Order Received - Pending</span>
+            </div>
+            <p class="text-sm text-gray-500 mt-2">Order ID: <span id="order-id-display">--</span></p>
+        </div>
+        
+        <!-- Tracking Steps -->
+        <div class="flex flex-col md:flex-row justify-between mb-12">
+            <div class="tracking-step active flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0">
+                <div class="w-16 h-16 rounded-full bg-white text-green-600 flex items-center justify-center text-2xl mb-4">
+                    📦
+                </div>
+                <p class="font-bold">Order Placed</p>
+                <p class="text-sm">Order confirmed</p>
+            </div>
+            
+            <div class="tracking-step flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0">
+                <div class="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-4">
+                    👨‍🍳
+                </div>
+                <p class="font-bold">Preparing</p>
+                <p class="text-sm">Food being prepared</p>
+            </div>
+            
+            <div class="tracking-step flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0">
+                <div class="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-4">
+                    🛵
+                </div>
+                <p class="font-bold">On the Way</p>
+                <p class="text-sm">Out for delivery</p>
+            </div>
+            
+            <div class="tracking-step flex flex-col items-center p-6 rounded-2xl">
+                <div class="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-4">
+                    🏠
+                </div>
+                <p class="font-bold">Delivered</p>
+                <p class="text-sm">Order delivered</p>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+            <!-- Map Container -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-lg p-8">
+                    <h2 class="text-2xl font-bold mb-6">📍 Live Tracking Map</h2>
+                    <div id="map"></div>
+                    
+                    <div class="mt-6 p-4 bg-blue-50 rounded-xl">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="font-bold text-blue-800">Estimated Arrival</p>
+                                <p id="eta" class="text-3xl font-black text-blue-600">25-30 min</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-blue-600">Delivery Partner</p>
+                                <p class="font-bold">Rahul</p>
+                                <p class="text-sm">📱 +91 98XXX XX321</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Order Details -->
+            <div>
+                <div class="bg-white rounded-3xl shadow-lg p-8 mb-8">
+                    <h2 class="text-2xl font-bold mb-6">📋 Order Details</h2>
+                    
+                    <div id="order-summary" class="space-y-4 mb-6">
+                        <!-- Order summary loaded from localStorage -->
+                    </div>
+                    
+                    <!-- OTP Section -->
+                    <div class="bg-green-50 border border-green-200 rounded-2xl p-6">
+                        <h3 class="font-bold text-green-800 mb-4">🔐 Delivery Verification OTP</h3>
+                        <div class="text-center">
+                            <p class="text-5xl font-bold text-green-600 mb-4" id="otp-display">123456</p>
+                            <p class="text-green-700 mb-4">
+                                Share this OTP with the delivery partner when your order arrives
+                            </p>
+                            <button id="share-otp" 
+                                    class="px-6 py-3 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-colors">
+                                📤 Share OTP with EasyGo
+                            </button>
+                            <p class="text-xs text-green-600 mt-3">
+                                ✅ This OTP verifies that you received the order
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Order Status Updates -->
+                <div class="bg-white rounded-3xl shadow-lg p-8">
+                    <h2 class="text-2xl font-bold mb-6">🔄 Status Updates</h2>
+                    <div id="status-updates" class="space-y-4">
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white">
+                                ✓
+                            </div>
+                            <div>
+                                <p class="font-bold">Order Confirmed</p>
+                                <p class="text-sm text-gray-600">Order received and payment verified</p>
+                                <p class="text-xs text-gray-500">Just now</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center text-white pulse">
+                                ⏳
+                            </div>
+                            <div>
+                                <p class="font-bold">Preparing Your Order</p>
+                                <p class="text-sm text-gray-600">Chef is preparing your delicious food</p>
+                                <p class="text-xs text-gray-500">Estimated: 10-15 min</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- After Delivery Section -->
+        <div id="after-delivery" class="hidden">
+            <div class="bg-gradient-to-r from-green-500 to-emerald-600 rounded-3xl shadow-lg p-12 text-center text-white">
+                <div class="text-6xl mb-6">🎉</div>
+                <h2 class="text-3xl font-bold mb-4">Order Delivered Successfully!</h2>
+                <p class="text-xl mb-8">Hope you enjoyed your meal. Please share your feedback with us.</p>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="https://www.google.com/maps/place/EasyGo/@22.7767506,75.9581962,17z/data=!3m1!4b1!4m6!3m5!1s0x39631d1e6d09fbb7:0x417f2409ea954602!8m2!3d22.7767506!4d75.9607711!16s%2Fg%2F11yt0fxskh?authuser=1&entry=ttu&g_ep=EgoyMDI1MTIwOS4wIKXMDSoKLDEwMDc5MjA3M0gBUAM%3D" 
+                       target="_blank"
+                       class="px-8 py-4 bg-white text-green-600 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
+                        ⭐ Rate us on Google
+                    </a>
+                    
+                    <a href="https://clean-scripts.github.io/Easygo-Menu/" 
+                       class="px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-2xl hover:bg-white/10 transition-colors">
+                        🛒 Order Again
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Order Cancelled Section -->
+        <div id="order-cancelled" class="hidden">
+            <div class="bg-gradient-to-r from-red-500 to-pink-600 rounded-3xl shadow-lg p-12 text-center text-white">
+                <div class="text-6xl mb-6">😢</div>
+                <h2 class="text-3xl font-bold mb-4">Order Not Accepted</h2>
+                <p class="text-xl mb-6">We're sorry, but we couldn't accept your order at this time.</p>
+                
+                <div class="bg-white/20 rounded-2xl p-6 max-w-md mx-auto mb-8">
+                    <p class="font-bold mb-2">💸 Refund Information:</p>
+                    <p>Your payment will be refunded within 5 working days.</p>
+                    <p class="text-sm mt-2">Amount will appear in your account automatically.</p>
+                </div>
+                
+                <a href="https://clean-scripts.github.io/Easygo-Menu/" 
+                   class="px-8 py-4 bg-white text-red-600 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
+                    🛍️ Try Ordering Again
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let deliveryMarker;
+        let restaurantMarker;
+        let updateInterval;
+        let currentStep = 1;
+        let simulatedLocation;
+        let orderStatus = 'preparing'; // preparing, out-for-delivery, delivered, cancelled
+        
+        // Load order data
+        function loadOrderData() {
+            const orderId = localStorage.getItem('easygo-order-id') || `ORD${Date.now().toString().slice(-6)}`;
+            const otp = localStorage.getItem('easygo-otp') || '123456';
+            const order = JSON.parse(localStorage.getItem('easygo-all-orders')) || [];
+            const currentOrder = order.find(o => o.orderId === orderId) || order[order.length - 1];
+            
+            // Display OTP
+            document.getElementById('otp-display').textContent = otp;
+            document.getElementById('order-id-display').textContent = orderId;
+            
+            // Check if order was cancelled
+            const cancelled = localStorage.getItem('easygo-order-cancelled');
+            if (cancelled === 'true') {
+                showCancelledMessage();
+                return;
+            }
+            
+            // Render order summary
+            if (currentOrder && currentOrder.items) {
+                const container = document.getElementById('order-summary');
+                let html = '';
+                
+                currentOrder.items.forEach(item => {
+                    html += `
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="font-medium">${item.name}</p>
+                                <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
+                            </div>
+                            <span class="font-bold">₹${item.price}</span>
+                        </div>
+                    `;
+                });
+                
+                html += `<div class="border-t pt-4">
+                            <div class="flex justify-between font-bold">
+                                <span>Total</span>
+                                <span>₹${currentOrder.totalAmount || '0.00'}</span>
+                            </div>
+                        </div>`;
+                
+                container.innerHTML = html;
+            }
+            
+            // Initialize map only for delivery
+            if (currentOrder && currentOrder.deliveryMode === 'delivery') {
+                initMap();
+                simulateDelivery();
+            } else {
+                document.getElementById('map').innerHTML = `
+                    <div class="h-full flex items-center justify-center bg-gray-100 rounded-xl">
+                        <div class="text-center">
+                            <div class="text-4xl mb-4">🛍️</div>
+                            <p class="font-bold">Takeaway Order</p>
+                            <p class="text-gray-600">Pickup from Prime Square</p>
+                        </div>
+                    </div>
+                `;
+                simulateTakeaway();
+            }
+        }
+        
+        function getPackName(pack) {
+            const names = {
+                'piece': 'Piece',
+                'standard': 'Standard',
+                'family': 'Family Pack',
+                'xl': 'Extra Large'
+            };
+            return names[pack] || pack;
+        }
+        
+        // Initialize map
+        function initMap() {
+            // Prime Square location
+            const primeSquare = [22.7767737, 75.9605483];
+            
+            map = L.map('map').setView(primeSquare, 15);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            
+            // Restaurant marker
+            restaurantMarker = L.marker(primeSquare).addTo(map)
+                .bindPopup('<b>EasyGo Restaurant</b><br>📍 Prime Square, Omaxe City 1')
+                .openPopup();
+            
+            // Initial delivery location (near restaurant)
+            simulatedLocation = L.latLng(22.7760, 75.9610);
+            deliveryMarker = L.marker(simulatedLocation, {
+                icon: L.divIcon({
+                    className: 'delivery-icon',
+                    html: '<div class="pulse bg-green-500 text-white p-3 rounded-full shadow-lg">🛵</div>',
+                    iconSize: [40, 40]
+                })
+            }).addTo(map)
+                .bindPopup('<b>Delivery Partner</b><br>Rahul | 📱 +91 98XXX XX321');
+        }
+        
+        // Simulate delivery progress
+        function simulateDelivery() {
+            const steps = document.querySelectorAll('.tracking-step');
+            
+            // Progress through steps
+            let step = 0;
+            updateInterval = setInterval(() => {
+                if (step < 4) {
+                    // Update tracking steps
+                    steps.forEach((s, i) => {
+                        s.classList.remove('active', 'completed');
+                        if (i < step) {
+                            s.classList.add('completed');
+                        } else if (i === step) {
+                            s.classList.add('active');
+                        }
+                    });
+                    
+                    // Update ETA
+                    const eta = document.getElementById('eta');
+                    if (step === 0) eta.textContent = '25-30 min';
+                    if (step === 1) eta.textContent = '20-25 min';
+                    if (step === 2) eta.textContent = '10-15 min';
+                    if (step === 3) {
+                        eta.textContent = 'Arriving now';
+                        showDeliveredMessage();
+                        clearInterval(updateInterval);
+                    }
+                    
+                    // Move delivery marker
+                    if (step === 2) { // When "On the way"
+                        // Simulate movement towards destination
+                        const progress = 0.3; // 30% of journey
+                        const lat = 22.7767737 - (0.001 * progress);
+                        const lng = 75.9605483 + (0.001 * progress);
+                        simulatedLocation = L.latLng(lat, lng);
+                        if (deliveryMarker) deliveryMarker.setLatLng(simulatedLocation);
+                        
+                        // Add status update
+                        if (!document.querySelector('.delivery-status')) {
+                            const updates = document.getElementById('status-updates');
+                            updates.innerHTML += `
+                                <div class="flex items-start gap-4 delivery-status">
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white pulse">
+                                        🛵
+                                    </div>
+                                    <div>
+                                        <p class="font-bold">Out for Delivery</p>
+                                        <p class="text-sm text-gray-600">Your order is on its way</p>
+                                        <p class="text-xs text-gray-500">Just now</p>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    step++;
+                }
+            }, 10000); // Update every 10 seconds
+        }
+        
+        // Simulate takeaway progress
+        function simulateTakeaway() {
+            const steps = document.querySelectorAll('.tracking-step');
+            
+            // Progress through steps
+            let step = 0;
+            updateInterval = setInterval(() => {
+                if (step < 4) {
+                    // Update tracking steps
+                    steps.forEach((s, i) => {
+                        s.classList.remove('active', 'completed');
+                        if (i < step) {
+                            s.classList.add('completed');
+                        } else if (i === step) {
+                            s.classList.add('active');
+                        }
+                    });
+                    
+                    // Update ETA
+                    const eta = document.getElementById('eta');
+                    if (step === 0) eta.textContent = '20-25 min';
+                    if (step === 1) eta.textContent = '15-20 min';
+                    if (step === 2) eta.textContent = '5-10 min';
+                    if (step === 3) {
+                        eta.textContent = 'Ready for Pickup';
+                        showDeliveredMessage();
+                        clearInterval(updateInterval);
+                    }
+                    
+                    step++;
+                }
+            }, 8000); // Update every 8 seconds for takeaway
+        }
+        
+        // Show delivered message
+        function showDeliveredMessage() {
+            // Update status badge
+            document.getElementById('order-status-badge').innerHTML = `
+                <i class="fas fa-check-circle"></i>
+                <span class="font-bold">Order Delivered - Completed</span>
+            `;
+            document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
+            document.getElementById('order-status-badge').classList.add('bg-green-100', 'text-green-800');
+            
+            document.getElementById('after-delivery').classList.remove('hidden');
+            
+            // Save delivery completion
+            localStorage.setItem('easygo-delivery-completed', 'true');
+        }
+        
+        // Show cancelled message
+        function showCancelledMessage() {
+            document.getElementById('order-cancelled').classList.remove('hidden');
+            clearInterval(updateInterval);
+            
+            // Update status badge
+            document.getElementById('order-status-badge').innerHTML = `
+                <i class="fas fa-times-circle"></i>
+                <span class="font-bold">Order Cancelled</span>
+            `;
+            document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
+            document.getElementById('order-status-badge').classList.add('bg-red-100', 'text-red-800');
+        }
+        
+        // Share OTP with EasyGo
+        document.getElementById('share-otp').addEventListener('click', () => {
+            const otp = document.getElementById('otp-display').textContent;
+            const orderId = document.getElementById('order-id-display').textContent;
+            const message = `✅ OTP VERIFICATION ✅%0A%0AOrder ID: ${orderId}%0AOTP: ${otp}%0A%0AOrder delivered successfully!`;
+            window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
+        });
+        
+        // Initialize
+        window.addEventListener('DOMContentLoaded', loadOrderData);
+        
+        // Auto-refresh status every 30 seconds
+        setInterval(() => {
+            // Check for status updates from localStorage
+            const cancelled = localStorage.getItem('easygo-order-cancelled');
+            if (cancelled === 'true') {
+                showCancelledMessage();
+            }
+        }, 30000);
+    </script>
+    
+    <!-- Font Awesome -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+</body>
+</html>
