@@ -23,9 +23,27 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+        .empty-overlay {
+            transition: all 0.3s ease;
+        }
     </style>
 </head>
 <body class="antialiased bg-gray-50">
+
+    <!-- Empty Order Overlay -->
+    <div id="emptyOrderOverlay" class="empty-overlay fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-10 rounded-2xl shadow-2xl text-center max-w-md mx-4">
+            <div class="text-6xl mb-6">📦</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">No Active Order Found</h2>
+            <p class="text-gray-600 mb-6">You don't have any active orders to track.</p>
+            <p class="text-sm text-gray-500 mb-8">Redirecting to menu in <span id="redirect-countdown">5</span> seconds...</p>
+            <a href="https://clean-scripts.github.io/Easygo-Menu/" 
+               class="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold rounded-xl hover:opacity-90 transition">
+                <i class="fas fa-shopping-cart"></i>
+                Go to Menu Now
+            </a>
+        </div>
+    </div>
 
     <header class="relative mb-8">
         <div class="h-40 overflow-hidden">
@@ -200,7 +218,7 @@
                 <p class="text-xl mb-8">Hope you enjoyed your meal. Please share your feedback with us.</p>
                 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <a href="https://www.google.com/maps/place/EasyGo/@22.7767506,75.9581962,17z/data=!3m1!4b1!4m6!3m5!1s0x39631d1e6d09fbb7:0x417f2409ea954602!8m2!3d22.7767506!4d75.9607711!16s%2Fg%2F11yt0fxskh?authuser=1&entry=ttu&g_ep=EgoyMDI1MTIwOS4wIKXMDSoKLDEwMDc5MjA3M0gBUAM%3D" 
+                    <a href="https://www.google.com/maps/place/EasyGo/@22.7767506,75.9581962,17z/data=!3m1!4b1!4m6!3m5!1s0x39631d1e6d09fbb7:0x417f2409ea954602!8m2!3d22.7767506!4d75.9607711!16s%2Fg%2F11yt0fxskh?authuser=1&entry=ttu&g_ep=EgoyMDI5MTIwOS4wIKXMDSoKLDEwMDc5MjA3M0gBUAM%3D" 
                        target="_blank"
                        class="px-8 py-4 bg-white text-green-600 font-bold rounded-2xl hover:bg-gray-100 transition-colors">
                         ⭐ Rate us on Google
@@ -276,10 +294,130 @@
     let deliveryMode = 'takeaway';
     let restaurantLocation = [22.7767737, 75.9605483]; // Prime Square location
     let customerLocation = null;
+    let deliveryCompleted = false;
+    let whatsappSent = false;
     
-    // Load order data
+    // ====== SECURITY CHECK FUNCTION ======
+    function checkOrderExists() {
+        try {
+            const orderId = localStorage.getItem('easygo-order-id');
+            const otp = localStorage.getItem('easygo-otp');
+            const orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
+            const currentOrder = orders.find(o => o.id === orderId) || orders[orders.length - 1];
+            
+            console.log("Security Check:", { orderId, otp, hasOrder: !!currentOrder });
+            
+            // Check 1: No order ID
+            if (!orderId || orderId === 'null' || orderId === 'undefined') {
+                return false;
+            }
+            
+            // Check 2: No OTP or OTP is 0
+            if (!otp || otp === '0' || otp === 'null' || otp === 'undefined') {
+                return false;
+            }
+            
+            // Check 3: No orders in history
+            if (!currentOrder) {
+                return false;
+            }
+            
+            // Check 4: Order was delivered more than 1 hour ago
+            const deliveryCompletedTime = localStorage.getItem('easygo-delivery-completed-time');
+            if (deliveryCompletedTime) {
+                const deliveryTime = new Date(deliveryCompletedTime);
+                const now = new Date();
+                const hoursDiff = (now - deliveryTime) / (1000 * 60 * 60);
+                
+                if (hoursDiff > 1) { // More than 1 hour since delivery
+                    console.log("Order delivered more than 1 hour ago, redirecting...");
+                    return false;
+                }
+            }
+            
+            return true;
+            
+        } catch (error) {
+            console.error("Security check error:", error);
+            return false;
+        }
+    }
+    
+    // ====== SHOW EMPTY ORDER OVERLAY ======
+    function showEmptyOrderOverlay() {
+        document.getElementById('emptyOrderOverlay').classList.remove('hidden');
+        
+        // Start countdown
+        let seconds = 5;
+        const countdownElement = document.getElementById('redirect-countdown');
+        countdownElement.textContent = seconds;
+        
+        const countdown = setInterval(() => {
+            seconds--;
+            countdownElement.textContent = seconds;
+            
+            if (seconds <= 0) {
+                clearInterval(countdown);
+                // Redirect to menu page
+                window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+            }
+        }, 1000);
+    }
+    
+    // ====== SEND DELIVERY CONFIRMATION WHATSAPP ======
+    function sendDeliveryConfirmation(order, otp) {
+        if (whatsappSent) return;
+        
+        try {
+            let message = `✅ *ORDER DELIVERED SUCCESSFULLY* ✅%0A%0A`;
+            message += `*Order ID:* ${order.id}%0A`;
+            message += `*OTP Verified:* ${otp}%0A`;
+            message += `*Customer:* ${order.customer || 'N/A'}%0A`;
+            message += `*Phone:* ${order.phone || 'N/A'}%0A`;
+            message += `*Amount:* ₹${order.amount.toFixed(2)}%0A`;
+            message += `*Delivery Time:* ${new Date().toLocaleTimeString()}%0A%0A`;
+            
+            // Items summary
+            message += `*Items Delivered:*%0A`;
+            order.items.forEach(item => {
+                message += `• ${item.name} × ${item.quantity} - ₹${item.total}%0A`;
+            });
+            
+            message += `%0A*Customer Feedback Link:*%0A`;
+            message += `https://www.google.com/maps/place/EasyGo/@22.7767506,75.9581962,17z/data=!3m1!4b1!4m6!3m5!1s0x39631d1e6d09fbb7:0x417f2409ea954602!8m2!3d22.7767506!4d75.9607711!16s%2Fg%2F11yt0fxskh?authuser=1&entry=ttu&g_ep=EgoyMDI5MTIwOS4wIKXMDSoKLDEwMDc5MjA3M0gBUAM%3D%0A%0A`;
+            
+            message += `*Thank you for ordering from EasyGo!* 🎉%0A`;
+            message += `Please share your feedback on Google Maps.`;
+            
+            console.log("Delivery confirmation WhatsApp:", decodeURIComponent(message));
+            
+            // Open WhatsApp with the message (in background)
+            const whatsappWindow = window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
+            
+            // Close the window after 2 seconds
+            setTimeout(() => {
+                if (whatsappWindow && !whatsappWindow.closed) {
+                    whatsappWindow.close();
+                }
+            }, 2000);
+            
+            whatsappSent = true;
+            
+        } catch (error) {
+            console.error("Error sending delivery confirmation:", error);
+        }
+    }
+    
+    // ====== MAIN LOAD FUNCTION ======
     function loadOrderData() {
-        const orderId = localStorage.getItem('easygo-order-id') || `ORD${Date.now().toString().slice(-6)}`;
+        // First, check if order exists (security check)
+        if (!checkOrderExists()) {
+            showEmptyOrderOverlay();
+            return; // Stop execution if no valid order
+        }
+        
+        // Only proceed if we have a valid order
+        const orderId = localStorage.getItem('easygo-order-id');
         const otp = localStorage.getItem('easygo-otp') || '0';
         const savedMode = localStorage.getItem('easygo-delivery-mode') || 'takeaway';
         deliveryMode = savedMode;
@@ -309,7 +447,26 @@
             return;
         }
         
-        // Load order details
+        // Check if delivery was already completed
+        const completed = localStorage.getItem('easygo-delivery-completed');
+        if (completed === 'true') {
+            // Show delivered message immediately
+            showDeliveredMessage();
+            
+            // Load order data for display
+            const orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
+            const currentOrder = orders.find(o => o.id === orderId) || orders[orders.length - 1];
+            
+            if (currentOrder) {
+                renderOrderSummary(currentOrder);
+                // Send delivery confirmation WhatsApp
+                sendDeliveryConfirmation(currentOrder, otp);
+            }
+            
+            return; // Don't start simulation
+        }
+        
+        // Load order details for active order
         const orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
         const currentOrder = orders.find(o => o.id === orderId) || orders[orders.length - 1];
         
@@ -329,13 +486,15 @@
         // Initialize map
         initMap();
         
-        // Start simulation
+        // Start simulation only for active orders
         if (deliveryMode === 'delivery') {
             simulateDelivery();
         } else {
             simulateTakeaway();
         }
     }
+    
+    // ====== EXISTING FUNCTIONS (Updated) ======
     
     function renderOrderSummary(order) {
         const container = document.getElementById('order-summary');
@@ -516,6 +675,8 @@
     
     // Show delivered message
     function showDeliveredMessage() {
+        deliveryCompleted = true;
+        
         // Update status badge
         document.getElementById('order-status-badge').innerHTML = `
             <i class="fas fa-check-circle"></i>
@@ -526,8 +687,31 @@
         
         document.getElementById('after-delivery').classList.remove('hidden');
         
-        // Save delivery completion
+        // Save delivery completion with timestamp
         localStorage.setItem('easygo-delivery-completed', 'true');
+        localStorage.setItem('easygo-delivery-completed-time', new Date().toISOString());
+        
+        // Send delivery confirmation WhatsApp
+        const orderId = localStorage.getItem('easygo-order-id');
+        const otp = localStorage.getItem('easygo-otp') || '0';
+        const orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
+        const currentOrder = orders.find(o => o.id === orderId) || orders[orders.length - 1];
+        
+        if (currentOrder) {
+            sendDeliveryConfirmation(currentOrder, otp);
+        }
+        
+        // Auto-redirect to menu after 1 hour
+        setTimeout(() => {
+            // Clear tracking data after 1 hour
+            localStorage.removeItem('easygo-order-id');
+            localStorage.removeItem('easygo-otp');
+            localStorage.removeItem('easygo-delivery-completed');
+            localStorage.removeItem('easygo-delivery-completed-time');
+            
+            // Redirect to menu
+            window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+        }, 60 * 60 * 1000); // 1 hour
     }
     
     // Show cancelled message
@@ -542,6 +726,14 @@
         `;
         document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
         document.getElementById('order-status-badge').classList.add('bg-red-100', 'text-red-800');
+        
+        // Clear order data after 30 seconds
+        setTimeout(() => {
+            localStorage.removeItem('easygo-order-id');
+            localStorage.removeItem('easygo-otp');
+            localStorage.removeItem('easygo-order-cancelled');
+            window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+        }, 30000);
     }
     
     // Share OTP with EasyGo
@@ -555,13 +747,12 @@
     // Initialize
     window.addEventListener('DOMContentLoaded', loadOrderData);
     
-    // Auto-refresh status every 30 seconds
+    // Auto-check every minute if order should be cleared
     setInterval(() => {
-        const cancelled = localStorage.getItem('easygo-order-cancelled');
-        if (cancelled === 'true') {
-            showCancelledMessage();
+        if (!checkOrderExists()) {
+            showEmptyOrderOverlay();
         }
-    }, 30000);
+    }, 60000); // Check every minute
 </script>
     
     <!-- Font Awesome -->
