@@ -11,7 +11,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        #map { height: 400px; border-radius: 1rem; }
+        #map { height: 400px; border-radius: 1rem; width: 100%; }
         .tracking-step { transition: all 0.3s; }
         .tracking-step.active { background-color: #10b981; color: white; }
         .tracking-step.completed { background-color: #059669; color: white; }
@@ -296,6 +296,7 @@
     let customerLocation = null;
     let deliveryCompleted = false;
     let whatsappSent = false;
+    let mapInitialized = false;
     
     // ====== SECURITY CHECK FUNCTION ======
     function checkOrderExists() {
@@ -408,6 +409,115 @@
         }
     }
     
+    // ====== INITIALIZE MAP ======
+    function initMap() {
+        try {
+            console.log("Initializing track page map...");
+            
+            if (mapInitialized && map) {
+                console.log("Map already initialized, invalidating size...");
+                map.invalidateSize();
+                return;
+            }
+            
+            const mapContainer = document.getElementById('map');
+            if (!mapContainer) {
+                console.error("Map container not found!");
+                setTimeout(initMap, 500);
+                return;
+            }
+            
+            // Clear any existing map
+            if (map) {
+                try {
+                    map.remove();
+                } catch (e) {
+                    console.log("Error removing old map:", e);
+                }
+                map = null;
+            }
+            
+            // Initialize map
+            map = L.map('map', {
+                center: restaurantLocation,
+                zoom: 15,
+                zoomControl: true,
+                scrollWheelZoom: true
+            });
+            
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Restaurant marker (always shown)
+            restaurantMarker = L.marker(restaurantLocation, {
+                icon: L.divIcon({
+                    className: 'restaurant-icon',
+                    html: '<div class="bg-red-500 text-white p-3 rounded-full shadow-lg">🏪</div>',
+                    iconSize: [40, 40]
+                })
+            }).addTo(map)
+                .bindPopup('<b>EasyGo Restaurant</b><br>📍 Prime Square, Omaxe City 1, Indore<br>📱 +91 76518 37322')
+                .openPopup();
+            
+            // Try to get customer location from localStorage
+            try {
+                const deliveryData = JSON.parse(localStorage.getItem('easygo-delivery') || '{}');
+                if (deliveryData.mode === 'delivery' && deliveryData.location) {
+                    customerLocation = [deliveryData.location.lat, deliveryData.location.lng];
+                    
+                    // Add delivery marker for delivery orders
+                    deliveryMarker = L.marker(customerLocation, {
+                        icon: L.divIcon({
+                            className: 'customer-icon',
+                            html: '<div class="bg-blue-500 text-white p-3 rounded-full shadow-lg">🏠</div>',
+                            iconSize: [40, 40]
+                        })
+                    }).addTo(map)
+                        .bindPopup('<b>Delivery Address</b><br>Customer location');
+                    
+                    // Fit bounds to show both restaurant and customer
+                    const bounds = L.latLngBounds(restaurantLocation, customerLocation);
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            } catch (e) {
+                console.error("Error getting delivery location:", e);
+            }
+            
+            // Force map resize after initialization
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                    console.log("Map invalidated size successfully");
+                }
+            }, 300);
+            
+            mapInitialized = true;
+            console.log("Track page map initialized successfully");
+            
+        } catch (error) {
+            console.error("Error initializing track page map:", error);
+            const mapContainer = document.getElementById('map');
+            if (mapContainer) {
+                mapContainer.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center bg-gray-100 rounded-2xl p-8">
+                        <div class="text-4xl mb-4">🗺️</div>
+                        <p class="font-bold text-gray-700">Map Loading Error</p>
+                        <p class="text-gray-600 text-sm mt-2">Please refresh the page</p>
+                        <button onclick="initMap()" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold">
+                            Retry Loading Map
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // Retry initialization after 1 second
+            setTimeout(initMap, 1000);
+        }
+    }
+    
     // ====== MAIN LOAD FUNCTION ======
     function loadOrderData() {
         // First, check if order exists (security check)
@@ -472,18 +582,9 @@
         
         if (currentOrder && currentOrder.items) {
             renderOrderSummary(currentOrder);
-            
-            // Try to get customer location for delivery
-            if (deliveryMode === 'delivery' && currentOrder.address) {
-                // For demo, use a location near the restaurant
-                customerLocation = [
-                    restaurantLocation[0] - 0.01,
-                    restaurantLocation[1] + 0.01
-                ];
-            }
         }
         
-        // Initialize map
+        // Initialize map - with retry mechanism
         initMap();
         
         // Start simulation only for active orders
@@ -493,8 +594,6 @@
             simulateTakeaway();
         }
     }
-    
-    // ====== EXISTING FUNCTIONS (Updated) ======
     
     function renderOrderSummary(order) {
         const container = document.getElementById('order-summary');
@@ -559,42 +658,6 @@
             'xl': 'Extra Large'
         };
         return names[pack] || pack;
-    }
-    
-    // Initialize map
-    function initMap() {
-        map = L.map('map').setView(restaurantLocation, 15);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        
-        // Restaurant marker (always shown)
-        restaurantMarker = L.marker(restaurantLocation, {
-            icon: L.divIcon({
-                className: 'restaurant-icon',
-                html: '<div class="bg-red-500 text-white p-3 rounded-full shadow-lg">🏪</div>',
-                iconSize: [40, 40]
-            })
-        }).addTo(map)
-            .bindPopup('<b>EasyGo Restaurant</b><br>📍 Prime Square, Omaxe City 1, Indore<br>📱 +91 76518 37322')
-            .openPopup();
-        
-        // Add delivery marker for delivery orders
-        if (deliveryMode === 'delivery' && customerLocation) {
-            deliveryMarker = L.marker(customerLocation, {
-                icon: L.divIcon({
-                    className: 'customer-icon',
-                    html: '<div class="bg-blue-500 text-white p-3 rounded-full shadow-lg">🏠</div>',
-                    iconSize: [40, 40]
-                })
-            }).addTo(map)
-                .bindPopup('<b>Delivery Address</b><br>Customer location');
-            
-            // Fit bounds to show both restaurant and customer
-            const bounds = L.latLngBounds(restaurantLocation, customerLocation);
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
     }
     
     // Simulate delivery progress
@@ -744,8 +807,20 @@
         window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
     });
     
-    // Initialize
-    window.addEventListener('DOMContentLoaded', loadOrderData);
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Small delay to ensure everything is loaded
+        setTimeout(loadOrderData, 100);
+    });
+    
+    // Fix map on window resize
+    window.addEventListener('resize', function() {
+        if (map && mapInitialized) {
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        }
+    });
     
     // Auto-check every minute if order should be cleared
     setInterval(() => {
@@ -753,6 +828,18 @@
             showEmptyOrderOverlay();
         }
     }, 60000); // Check every minute
+    
+    // Reinitialize map if it's not visible
+    function checkMapVisibility() {
+        const mapContainer = document.getElementById('map');
+        if (mapContainer && mapContainer.offsetWidth === 0 && mapContainer.offsetHeight === 0) {
+            console.log("Map container not visible, reinitializing...");
+            setTimeout(initMap, 1000);
+        }
+    }
+    
+    // Check map visibility after page loads
+    setTimeout(checkMapVisibility, 2000);
 </script>
     
     <!-- Font Awesome -->
