@@ -71,7 +71,7 @@
                 <p class="text-sm">Food being prepared</p>
             </div>
             
-            <div class="tracking-step flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0">
+            <div id="delivery-step" class="tracking-step flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0 hidden">
                 <div class="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-4">
                     🛵
                 </div>
@@ -79,12 +79,20 @@
                 <p class="text-sm">Out for delivery</p>
             </div>
             
+            <div id="pickup-step" class="tracking-step flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0">
+                <div class="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-4">
+                    🏪
+                </div>
+                <p class="font-bold">Ready for Pickup</p>
+                <p class="text-sm">Order is ready</p>
+            </div>
+            
             <div class="tracking-step flex flex-col items-center p-6 rounded-2xl">
                 <div class="w-16 h-16 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center text-2xl mb-4">
-                    🏠
+                    ✅
                 </div>
-                <p class="font-bold">Delivered</p>
-                <p class="text-sm">Order delivered</p>
+                <p class="font-bold">Completed</p>
+                <p class="text-sm">Order completed</p>
             </div>
         </div>
         
@@ -103,7 +111,7 @@
                             </div>
                             <div class="text-right">
                                 <p class="text-sm text-blue-600">Delivery Partner</p>
-                                <p class="font-bold">EasyGo</p>
+                                <p class="font-bold" id="delivery-partner-name">EasyGo-Rider</p>
                                 <div class="mt-4">
                                 <a href="tel:+917651837322" 
                                class="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-gray-100 rounded-[2rem] shadow-lg hover:shadow-indigo-100 hover:border-indigo-600 hover:scale-105 transition-all duration-300 group">
@@ -139,7 +147,7 @@
                     <div class="bg-green-50 border border-green-200 rounded-2xl p-6">
                         <h3 class="font-bold text-green-800 mb-4">🔐 Delivery Verification OTP</h3>
                         <div class="text-center">
-                            <p class="text-5xl font-bold text-green-600 mb-4" id="otp-display">123456</p>
+                            <p class="text-5xl font-bold text-green-600 mb-4" id="otp-display">0</p>
                             <p class="text-green-700 mb-4">
                                 Share this OTP with the delivery partner when your order arrives
                             </p>
@@ -227,261 +235,334 @@
         </div>
     </div>
 
-    <script>
-        let map;
-        let deliveryMarker;
-        let restaurantMarker;
-        let updateInterval;
-        let currentStep = 1;
-        let simulatedLocation;
-        let orderStatus = 'preparing'; // preparing, out-for-delivery, delivered, cancelled
-        
-        // Load order data
-        function loadOrderData() {
-            const orderId = localStorage.getItem('easygo-order-id') || `ORD${Date.now().toString().slice(-6)}`;
-            const otp = localStorage.getItem('easygo-otp') || '123456';
-            const order = JSON.parse(localStorage.getItem('easygo-all-orders')) || [];
-            const currentOrder = order.find(o => o.orderId === orderId) || order[order.length - 1];
-            
-            // Display OTP
-            document.getElementById('otp-display').textContent = otp;
-            document.getElementById('order-id-display').textContent = orderId;
-            
-            // Check if order was cancelled
-            const cancelled = localStorage.getItem('easygo-order-cancelled');
-            if (cancelled === 'true') {
-                showCancelledMessage();
-                return;
-            }
-            
-            // Render order summary
-            if (currentOrder && currentOrder.items) {
-                const container = document.getElementById('order-summary');
-                let html = '';
-                
-                currentOrder.items.forEach(item => {
-                    html += `
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="font-medium">${item.name}</p>
-                                <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
-                            </div>
-                            <span class="font-bold">₹${item.price}</span>
-                        </div>
-                    `;
-                });
-                
-                html += `<div class="border-t pt-4">
-                            <div class="flex justify-between font-bold">
-                                <span>Total</span>
-                                <span>₹${currentOrder.totalAmount || '0.00'}</span>
-                            </div>
-                        </div>`;
-                
-                container.innerHTML = html;
-            }
-            
-            // Initialize map only for delivery
-            if (currentOrder && currentOrder.deliveryMode === 'delivery') {
-                initMap();
-                simulateDelivery();
-            } else {
-                document.getElementById('map').innerHTML = `
-                    <div class="h-full flex items-center justify-center bg-gray-100 rounded-xl">
-                        <div class="text-center">
-                            <div class="text-4xl mb-4">🛍️</div>
-                            <p class="font-bold">Takeaway Order</p>
-                            <p class="text-gray-600">Pickup from Prime Square</p>
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <div class="flex items-center">
+                        <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                             class="h-12 w-12 rounded-full bg-white p-1 mr-3">
+                        <div>
+                            <h2 class="text-xl font-bold">Easy Go</h2>
+                            <p class="text-gray-400 text-sm">Freshness & Speed Delivered</p>
                         </div>
                     </div>
-                `;
-                simulateTakeaway();
-            }
+                </div>
+                
+                <div class="text-center md:text-right">
+                    <p class="text-gray-400 text-sm mb-2">
+                        © 2024 Easy Go + All Rights Reserved
+                    </p>
+                    <p class="text-gray-500 text-xs">
+                        Serving daily from 5:00 PM to 10:00 PM
+                    </p>
+                    <div class="mt-4">
+                        <a href="#" class="text-gray-400 hover:text-white text-sm mr-4">View Menu</a>
+                        <a href="#" class="text-gray-400 hover:text-white text-sm mr-4">Privacy Policy</a>
+                        <a href="#" class="text-gray-400 hover:text-white text-sm">Terms & Conditions</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+<script>
+    let map;
+    let deliveryMarker;
+    let restaurantMarker;
+    let updateInterval;
+    let orderStatus = 'preparing';
+    let deliveryMode = 'takeaway';
+    let restaurantLocation = [22.7767737, 75.9605483]; // Prime Square location
+    let customerLocation = null;
+    
+    // Load order data
+    function loadOrderData() {
+        const orderId = localStorage.getItem('easygo-order-id') || `ORD${Date.now().toString().slice(-6)}`;
+        const otp = localStorage.getItem('easygo-otp') || '0';
+        const savedMode = localStorage.getItem('easygo-delivery-mode') || 'takeaway';
+        deliveryMode = savedMode;
+        
+        // Display OTP (show "0" if not available)
+        document.getElementById('otp-display').textContent = otp === '0' ? '0' : otp;
+        document.getElementById('order-id-display').textContent = orderId;
+        
+        // Update delivery partner info
+        document.getElementById('delivery-partner-name').textContent = "EasyGo-Rider";
+        
+        // Adjust UI based on delivery mode
+        if (deliveryMode === 'delivery') {
+            document.getElementById('delivery-step').classList.remove('hidden');
+            document.getElementById('pickup-step').classList.add('hidden');
+            document.querySelector('#delivery-step .w-16').classList.add('bg-gray-100', 'text-gray-400');
+        } else {
+            document.getElementById('delivery-step').classList.add('hidden');
+            document.getElementById('pickup-step').classList.remove('hidden');
+            document.querySelector('#pickup-step .w-16').classList.add('bg-gray-100', 'text-gray-400');
         }
         
-        function getPackName(pack) {
-            const names = {
-                'piece': 'Piece',
-                'standard': 'Standard',
-                'family': 'Family Pack',
-                'xl': 'Extra Large'
-            };
-            return names[pack] || pack;
+        // Check if order was cancelled
+        const cancelled = localStorage.getItem('easygo-order-cancelled');
+        if (cancelled === 'true') {
+            showCancelledMessage();
+            return;
+        }
+        
+        // Load order details
+        const orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
+        const currentOrder = orders.find(o => o.id === orderId) || orders[orders.length - 1];
+        
+        if (currentOrder && currentOrder.items) {
+            renderOrderSummary(currentOrder);
+            
+            // Try to get customer location for delivery
+            if (deliveryMode === 'delivery' && currentOrder.address) {
+                // For demo, use a location near the restaurant
+                customerLocation = [
+                    restaurantLocation[0] - 0.01,
+                    restaurantLocation[1] + 0.01
+                ];
+            }
         }
         
         // Initialize map
-        function initMap() {
-            // Prime Square location
-            const primeSquare = [22.7767737, 75.9605483];
-            
-            map = L.map('map').setView(primeSquare, 15);
-            
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(map);
-            
-            // Restaurant marker
-            restaurantMarker = L.marker(primeSquare).addTo(map)
-                .bindPopup('<b>EasyGo Restaurant</b><br>📍 Prime Square, Omaxe City 1')
-                .openPopup();
-            
-            // Initial delivery location (near restaurant)
-            simulatedLocation = L.latLng(22.7760, 75.9610);
-            deliveryMarker = L.marker(simulatedLocation, {
+        initMap();
+        
+        // Start simulation
+        if (deliveryMode === 'delivery') {
+            simulateDelivery();
+        } else {
+            simulateTakeaway();
+        }
+    }
+    
+    function renderOrderSummary(order) {
+        const container = document.getElementById('order-summary');
+        let html = '';
+        
+        order.items.forEach(item => {
+            html += `
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="font-medium">${item.name}</p>
+                        <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
+                    </div>
+                    <span class="font-bold">₹${item.total}</span>
+                </div>
+            `;
+        });
+        
+        // Add totals
+        const foodTotal = order.totals?.foodTotal || order.amount;
+        const gstFood = order.totals?.gstFood || 0;
+        const deliveryCharge = order.totals?.deliveryCharge || 0;
+        const gstDelivery = order.totals?.gstDelivery || 0;
+        
+        html += `
+            <div class="border-t pt-4 space-y-2">
+                <div class="flex justify-between">
+                    <span>Food Total</span>
+                    <span>₹${foodTotal.toFixed(2)}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>GST on Food (5%)</span>
+                    <span>₹${gstFood.toFixed(2)}</span>
+                </div>`;
+        
+        if (deliveryCharge > 0) {
+            html += `
+                <div class="flex justify-between">
+                    <span>Delivery Charge</span>
+                    <span>₹${deliveryCharge.toFixed(2)}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>GST on Delivery (18%)</span>
+                    <span>₹${gstDelivery.toFixed(2)}</span>
+                </div>`;
+        }
+        
+        html += `
+                <div class="flex justify-between font-bold text-lg border-t pt-2">
+                    <span>Total Amount</span>
+                    <span>₹${order.amount.toFixed(2)}</span>
+                </div>
+            </div>`;
+        
+        container.innerHTML = html;
+    }
+    
+    function getPackName(pack) {
+        const names = {
+            'piece': 'Piece',
+            'standard': 'Standard',
+            'family': 'Family Pack',
+            'xl': 'Extra Large'
+        };
+        return names[pack] || pack;
+    }
+    
+    // Initialize map
+    function initMap() {
+        map = L.map('map').setView(restaurantLocation, 15);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Restaurant marker (always shown)
+        restaurantMarker = L.marker(restaurantLocation, {
+            icon: L.divIcon({
+                className: 'restaurant-icon',
+                html: '<div class="bg-red-500 text-white p-3 rounded-full shadow-lg">🏪</div>',
+                iconSize: [40, 40]
+            })
+        }).addTo(map)
+            .bindPopup('<b>EasyGo Restaurant</b><br>📍 Prime Square, Omaxe City 1, Indore<br>📱 +91 76518 37322')
+            .openPopup();
+        
+        // Add delivery marker for delivery orders
+        if (deliveryMode === 'delivery' && customerLocation) {
+            deliveryMarker = L.marker(customerLocation, {
                 icon: L.divIcon({
-                    className: 'delivery-icon',
-                    html: '<div class="pulse bg-green-500 text-white p-3 rounded-full shadow-lg">🛵</div>',
+                    className: 'customer-icon',
+                    html: '<div class="bg-blue-500 text-white p-3 rounded-full shadow-lg">🏠</div>',
                     iconSize: [40, 40]
                 })
             }).addTo(map)
-                .bindPopup('<b>Delivery Partner</b><br>Rahul | 📱 +91 98XXX XX321');
-        }
-        
-        // Simulate delivery progress
-        function simulateDelivery() {
-            const steps = document.querySelectorAll('.tracking-step');
+                .bindPopup('<b>Delivery Address</b><br>Customer location');
             
-            // Progress through steps
-            let step = 0;
-            updateInterval = setInterval(() => {
-                if (step < 4) {
-                    // Update tracking steps
-                    steps.forEach((s, i) => {
-                        s.classList.remove('active', 'completed');
-                        if (i < step) {
-                            s.classList.add('completed');
-                        } else if (i === step) {
-                            s.classList.add('active');
-                        }
-                    });
-                    
-                    // Update ETA
-                    const eta = document.getElementById('eta');
-                    if (step === 0) eta.textContent = '25-30 min';
-                    if (step === 1) eta.textContent = '20-25 min';
-                    if (step === 2) eta.textContent = '10-15 min';
-                    if (step === 3) {
+            // Fit bounds to show both restaurant and customer
+            const bounds = L.latLngBounds(restaurantLocation, customerLocation);
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }
+    
+    // Simulate delivery progress
+    function simulateDelivery() {
+        const steps = document.querySelectorAll('.tracking-step');
+        let step = 0;
+        
+        updateInterval = setInterval(() => {
+            if (step < 5) {
+                // Update tracking steps
+                steps.forEach((s, i) => {
+                    s.classList.remove('active', 'completed');
+                    if (i < step) {
+                        s.classList.add('completed');
+                    } else if (i === step) {
+                        s.classList.add('active');
+                    }
+                });
+                
+                // Update ETA
+                const eta = document.getElementById('eta');
+                switch(step) {
+                    case 0: eta.textContent = '25-30 min'; break;
+                    case 1: eta.textContent = '20-25 min'; break;
+                    case 2: eta.textContent = '15-20 min'; break;
+                    case 3: eta.textContent = '5-10 min'; break;
+                    case 4: 
                         eta.textContent = 'Arriving now';
                         showDeliveredMessage();
                         clearInterval(updateInterval);
-                    }
-                    
-                    // Move delivery marker
-                    if (step === 2) { // When "On the way"
-                        // Simulate movement towards destination
-                        const progress = 0.3; // 30% of journey
-                        const lat = 22.7767737 - (0.001 * progress);
-                        const lng = 75.9605483 + (0.001 * progress);
-                        simulatedLocation = L.latLng(lat, lng);
-                        if (deliveryMarker) deliveryMarker.setLatLng(simulatedLocation);
-                        
-                        // Add status update
-                        if (!document.querySelector('.delivery-status')) {
-                            const updates = document.getElementById('status-updates');
-                            updates.innerHTML += `
-                                <div class="flex items-start gap-4 delivery-status">
-                                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white pulse">
-                                        🛵
-                                    </div>
-                                    <div>
-                                        <p class="font-bold">Out for Delivery</p>
-                                        <p class="text-sm text-gray-600">Your order is on its way</p>
-                                        <p class="text-xs text-gray-500">Just now</p>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    }
-                    
-                    step++;
+                        break;
                 }
-            }, 10000); // Update every 10 seconds
-        }
+                
+                step++;
+            }
+        }, 8000); // Update every 8 seconds
+    }
+    
+    // Simulate takeaway progress
+    function simulateTakeaway() {
+        const steps = document.querySelectorAll('.tracking-step');
+        let step = 0;
         
-        // Simulate takeaway progress
-        function simulateTakeaway() {
-            const steps = document.querySelectorAll('.tracking-step');
-            
-            // Progress through steps
-            let step = 0;
-            updateInterval = setInterval(() => {
-                if (step < 4) {
-                    // Update tracking steps
-                    steps.forEach((s, i) => {
-                        s.classList.remove('active', 'completed');
-                        if (i < step) {
-                            s.classList.add('completed');
-                        } else if (i === step) {
-                            s.classList.add('active');
-                        }
-                    });
-                    
-                    // Update ETA
-                    const eta = document.getElementById('eta');
-                    if (step === 0) eta.textContent = '20-25 min';
-                    if (step === 1) eta.textContent = '15-20 min';
-                    if (step === 2) eta.textContent = '5-10 min';
-                    if (step === 3) {
+        updateInterval = setInterval(() => {
+            if (step < 5) {
+                // Update tracking steps (skip delivery step)
+                steps.forEach((s, i) => {
+                    // Skip index 2 (delivery step) for takeaway
+                    const adjustedIndex = i > 2 ? i : i;
+                    s.classList.remove('active', 'completed');
+                    if (adjustedIndex < step) {
+                        s.classList.add('completed');
+                    } else if (adjustedIndex === step) {
+                        s.classList.add('active');
+                    }
+                });
+                
+                // Update ETA
+                const eta = document.getElementById('eta');
+                switch(step) {
+                    case 0: eta.textContent = '20-25 min'; break;
+                    case 1: eta.textContent = '15-20 min'; break;
+                    case 2: eta.textContent = '5-10 min'; break;
+                    case 3: 
                         eta.textContent = 'Ready for Pickup';
+                        break;
+                    case 4: 
+                        eta.textContent = 'Ready';
                         showDeliveredMessage();
                         clearInterval(updateInterval);
-                    }
-                    
-                    step++;
+                        break;
                 }
-            }, 8000); // Update every 8 seconds for takeaway
-        }
-        
-        // Show delivered message
-        function showDeliveredMessage() {
-            // Update status badge
-            document.getElementById('order-status-badge').innerHTML = `
-                <i class="fas fa-check-circle"></i>
-                <span class="font-bold">Order Delivered - Completed</span>
-            `;
-            document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
-            document.getElementById('order-status-badge').classList.add('bg-green-100', 'text-green-800');
-            
-            document.getElementById('after-delivery').classList.remove('hidden');
-            
-            // Save delivery completion
-            localStorage.setItem('easygo-delivery-completed', 'true');
-        }
-        
-        // Show cancelled message
-        function showCancelledMessage() {
-            document.getElementById('order-cancelled').classList.remove('hidden');
-            clearInterval(updateInterval);
-            
-            // Update status badge
-            document.getElementById('order-status-badge').innerHTML = `
-                <i class="fas fa-times-circle"></i>
-                <span class="font-bold">Order Cancelled</span>
-            `;
-            document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
-            document.getElementById('order-status-badge').classList.add('bg-red-100', 'text-red-800');
-        }
-        
-        // Share OTP with EasyGo
-        document.getElementById('share-otp').addEventListener('click', () => {
-            const otp = document.getElementById('otp-display').textContent;
-            const orderId = document.getElementById('order-id-display').textContent;
-            const message = `✅ OTP VERIFICATION ✅%0A%0AOrder ID: ${orderId}%0AOTP: ${otp}%0A%0AOrder delivered successfully!`;
-            window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
-        });
-        
-        // Initialize
-        window.addEventListener('DOMContentLoaded', loadOrderData);
-        
-        // Auto-refresh status every 30 seconds
-        setInterval(() => {
-            // Check for status updates from localStorage
-            const cancelled = localStorage.getItem('easygo-order-cancelled');
-            if (cancelled === 'true') {
-                showCancelledMessage();
+                
+                step++;
             }
-        }, 30000);
-    </script>
+        }, 7000); // Update every 7 seconds for takeaway
+    }
+    
+    // Show delivered message
+    function showDeliveredMessage() {
+        // Update status badge
+        document.getElementById('order-status-badge').innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            <span class="font-bold">Order Completed</span>
+        `;
+        document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
+        document.getElementById('order-status-badge').classList.add('bg-green-100', 'text-green-800');
+        
+        document.getElementById('after-delivery').classList.remove('hidden');
+        
+        // Save delivery completion
+        localStorage.setItem('easygo-delivery-completed', 'true');
+    }
+    
+    // Show cancelled message
+    function showCancelledMessage() {
+        document.getElementById('order-cancelled').classList.remove('hidden');
+        clearInterval(updateInterval);
+        
+        // Update status badge
+        document.getElementById('order-status-badge').innerHTML = `
+            <i class="fas fa-times-circle"></i>
+            <span class="font-bold">Order Cancelled</span>
+        `;
+        document.getElementById('order-status-badge').classList.remove('bg-yellow-100', 'text-yellow-800');
+        document.getElementById('order-status-badge').classList.add('bg-red-100', 'text-red-800');
+    }
+    
+    // Share OTP with EasyGo
+    document.getElementById('share-otp').addEventListener('click', () => {
+        const otp = document.getElementById('otp-display').textContent;
+        const orderId = document.getElementById('order-id-display').textContent;
+        const message = `✅ OTP VERIFICATION ✅%0A%0AOrder ID: ${orderId}%0AOTP: ${otp}%0A%0AOrder delivered successfully!`;
+        window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
+    });
+    
+    // Initialize
+    window.addEventListener('DOMContentLoaded', loadOrderData);
+    
+    // Auto-refresh status every 30 seconds
+    setInterval(() => {
+        const cancelled = localStorage.getItem('easygo-order-cancelled');
+        if (cancelled === 'true') {
+            showCancelledMessage();
+        }
+    }, 30000);
+</script>
     
     <!-- Font Awesome -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
