@@ -127,10 +127,19 @@
                 <div class="bg-white rounded-3xl shadow-lg p-8">
                     <h2 class="text-2xl font-bold mb-6">📍 Live Tracking Map</h2>
                     <div id="map" class="map-placeholder">
-                        <div class="text-center">
-                            <div class="text-4xl mb-4">🗺️</div>
-                            <p>Live tracking will update automatically</p>
-                            <p class="text-sm opacity-80 mt-2">When admin updates status</p>
+                        <div class="text-center p-4">
+                            <div class="flex items-center justify-center mb-4">
+                                <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
+                                     class="h-16 w-16 rounded-full bg-white p-2 shadow-lg">
+                            </div>
+                            <p class="text-xl font-bold mb-2">EasyGo Outlet Location</p>
+                            <p class="mb-4">Plot No 5, Sector 1, New Mandoli, Indore, MP</p>
+                            <a href="https://maps.app.goo.gl/w7jfBVEtQsXvqTPe8" 
+                               target="_blank"
+                               class="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-600 font-bold rounded-xl shadow hover:shadow-lg transition">
+                                <span>🗺️</span>
+                                View on Google Maps
+                            </a>
                         </div>
                     </div>
                     
@@ -306,9 +315,9 @@
     function checkOrderExists() {
         try {
             const orderId = localStorage.getItem('easygo-order-id');
-            const otp = localStorage.getItem('easygo-otp');
             
-            if (!orderId || !otp || otp === '0') {
+            // No order ID at all
+            if (!orderId) {
                 return false;
             }
             
@@ -316,11 +325,16 @@
             const delivered = localStorage.getItem('easygo-delivery-completed');
             const cancelled = localStorage.getItem('easygo-order-cancelled');
             
+            // If delivered or cancelled, still show the page
             if (delivered === 'true' || cancelled === 'true') {
-                return true; // Still allow viewing but no updates
+                return true;
             }
             
-            return true;
+            // Check if there's an active order
+            const activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+            const hasActiveOrder = activeOrders.some(order => order.orderId === orderId);
+            
+            return hasActiveOrder;
             
         } catch (error) {
             console.error("Security check error:", error);
@@ -330,7 +344,13 @@
     
     // ====== SHOW EMPTY ORDER OVERLAY ======
     function showEmptyOrderOverlay() {
+        // Show overlay
         document.getElementById('emptyOrderOverlay').classList.remove('hidden');
+        
+        // Hide main content
+        document.querySelector('.max-w-6xl').style.display = 'none';
+        document.querySelector('footer').style.display = 'none';
+        document.querySelector('header').style.display = 'none';
         
         // Start countdown
         let seconds = 5;
@@ -350,6 +370,7 @@
     
     // ====== LOAD ORDER DATA ======
     function loadOrderData() {
+        // Check if order exists
         if (!checkOrderExists()) {
             showEmptyOrderOverlay();
             return;
@@ -414,6 +435,7 @@
             'pending': { step: 1, badge: 'Order Received - Pending', badgeColor: 'bg-yellow-100 text-yellow-800', badgeIcon: '⏳' },
             'preparing': { step: 2, badge: 'Preparing Your Order', badgeColor: 'bg-blue-100 text-blue-800', badgeIcon: '👨‍🍳' },
             'out-for-delivery': { step: 3, badge: 'Out for Delivery', badgeColor: 'bg-purple-100 text-purple-800', badgeIcon: '🛵' },
+            'ready-for-pickup': { step: 3, badge: 'Ready for Pickup', badgeColor: 'bg-orange-100 text-orange-800', badgeIcon: '🏪' },
             'delivered': { step: 5, badge: 'Order Delivered', badgeColor: 'bg-green-100 text-green-800', badgeIcon: '✅' },
             'cancelled': { step: 0, badge: 'Order Cancelled', badgeColor: 'bg-red-100 text-red-800', badgeIcon: '❌' }
         };
@@ -463,6 +485,7 @@
             'pending': '25-30 min',
             'preparing': '20-25 min',
             'out-for-delivery': '15-20 min',
+            'ready-for-pickup': 'Ready Now',
             'delivered': 'Arrived',
             'cancelled': 'N/A'
         };
@@ -475,7 +498,9 @@
         const messages = {
             'preparing': { title: 'Food Preparation Started', message: 'Chef is preparing your delicious food', icon: '👨‍🍳', color: 'bg-blue-500' },
             'out-for-delivery': { title: 'Out for Delivery', message: 'Your order is on the way!', icon: '🛵', color: 'bg-purple-500' },
-            'delivered': { title: 'Order Delivered', message: 'Your order has been delivered successfully', icon: '✅', color: 'bg-green-500' }
+            'ready-for-pickup': { title: 'Ready for Pickup', message: 'Your order is ready for pickup', icon: '🏪', color: 'bg-orange-500' },
+            'delivered': { title: 'Order Delivered', message: 'Your order has been delivered successfully', icon: '✅', color: 'bg-green-500' },
+            'cancelled': { title: 'Order Cancelled', message: 'Your order has been cancelled', icon: '❌', color: 'bg-red-500' }
         };
         
         if (messages[status]) {
@@ -508,52 +533,57 @@
         const container = document.getElementById('order-summary');
         let html = '';
         
-        order.items.forEach(item => {
-            html += `
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="font-medium">${item.name}</p>
-                        <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
+        if (order && order.items) {
+            order.items.forEach(item => {
+                html += `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-medium">${item.name}</p>
+                            <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
+                        </div>
+                        <span class="font-bold">₹${parseFloat(item.total).toFixed(2)}</span>
                     </div>
-                    <span class="font-bold">₹${parseFloat(item.total).toFixed(2)}</span>
-                </div>
-            `;
-        });
-        
-        const foodTotal = order.totals?.foodTotal || order.amount;
-        const gstFood = order.totals?.gstFood || 0;
-        const deliveryCharge = order.totals?.deliveryCharge || 0;
-        const gstDelivery = order.totals?.gstDelivery || 0;
-        
-        html += `
-            <div class="border-t pt-4 space-y-2">
-                <div class="flex justify-between">
-                    <span>Food Total</span>
-                    <span>₹${foodTotal.toFixed(2)}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>GST on Food (5%)</span>
-                    <span>₹${gstFood.toFixed(2)}</span>
-                </div>`;
-        
-        if (deliveryCharge > 0) {
+                `;
+            });
+            
+            const foodTotal = order.totals?.foodTotal || order.amount;
+            const gstFood = order.totals?.gstFood || 0;
+            const deliveryCharge = order.totals?.deliveryCharge || 0;
+            const gstDelivery = order.totals?.gstDelivery || 0;
+            const total = order.amount || (foodTotal + gstFood + deliveryCharge + gstDelivery);
+            
             html += `
-                <div class="flex justify-between">
-                    <span>Delivery Charge</span>
-                    <span>₹${deliveryCharge.toFixed(2)}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>GST on Delivery (18%)</span>
-                    <span>₹${gstDelivery.toFixed(2)}</span>
+                <div class="border-t pt-4 space-y-2">
+                    <div class="flex justify-between">
+                        <span>Food Total</span>
+                        <span>₹${foodTotal.toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>GST on Food (5%)</span>
+                        <span>₹${gstFood.toFixed(2)}</span>
+                    </div>`;
+            
+            if (deliveryCharge > 0) {
+                html += `
+                    <div class="flex justify-between">
+                        <span>Delivery Charge</span>
+                        <span>₹${deliveryCharge.toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>GST on Delivery (18%)</span>
+                        <span>₹${gstDelivery.toFixed(2)}</span>
+                    </div>`;
+            }
+            
+            html += `
+                    <div class="flex justify-between font-bold text-lg border-t pt-2">
+                        <span>Total Amount</span>
+                        <span>₹${total.toFixed(2)}</span>
+                    </div>
                 </div>`;
+        } else {
+            html = '<p class="text-gray-500">No order details available</p>';
         }
-        
-        html += `
-                <div class="flex justify-between font-bold text-lg border-t pt-2">
-                    <span>Total Amount</span>
-                    <span>₹${order.amount.toFixed(2)}</span>
-                </div>
-            </div>`;
         
         container.innerHTML = html;
     }
@@ -650,30 +680,37 @@
         }, 30000);
     }
     
-    // ====== EVENT LISTENERS ======
+    // ====== INITIALIZE PAGE ======
     document.addEventListener('DOMContentLoaded', function() {
+        // Load order data after a short delay to ensure DOM is ready
         setTimeout(loadOrderData, 100);
         
         // Share OTP button
         document.getElementById('share-otp').addEventListener('click', () => {
             const otp = document.getElementById('otp-display').textContent;
             const orderId = document.getElementById('order-id-display').textContent;
+            
+            if (!otp || otp === '0') {
+                alert('OTP not generated yet. Please wait for order confirmation.');
+                return;
+            }
+            
             const message = `✅ OTP VERIFICATION ✅%0A%0AOrder ID: ${orderId}%0AOTP: ${otp}%0A%0AOrder delivered successfully!`;
             
-            // Create invisible iframe for WhatsApp
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = `https://web.whatsapp.com/send?phone=917651837322&text=${message}`;
-            document.body.appendChild(iframe);
+            // Open WhatsApp in new tab
+            window.open(`https://wa.me/917651837322?text=${message}`, '_blank');
             
-            setTimeout(() => {
-                if (iframe.parentNode) {
-                    iframe.parentNode.removeChild(iframe);
-                }
-            }, 3000);
-            
-            alert('OTP shared with EasyGo!');
+            alert('OTP shared with EasyGo! WhatsApp will open with OTP details.');
         });
+        
+        // Refresh button for testing
+        const refreshBtn = document.createElement('button');
+        refreshBtn.innerHTML = '🔄 Refresh Status';
+        refreshBtn.className = 'fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-600 transition z-40';
+        refreshBtn.onclick = () => {
+            location.reload();
+        };
+        document.body.appendChild(refreshBtn);
     });
     
     // Cleanup on page unload
@@ -682,6 +719,40 @@
             clearInterval(updateInterval);
         }
     });
+    
+    // For testing purposes - simulate admin updates
+    window.simulateAdminUpdate = function(status) {
+        const orderId = localStorage.getItem('easygo-order-id');
+        if (!orderId) {
+            alert('No order ID found');
+            return;
+        }
+        
+        let activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+        const orderIndex = activeOrders.findIndex(o => o.orderId === orderId);
+        
+        if (orderIndex === -1) {
+            alert('Order not found in active orders');
+            return;
+        }
+        
+        activeOrders[orderIndex].status = status;
+        localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
+        
+        alert(`Order status updated to: ${status}`);
+        
+        // If delivered, move to history
+        if (status === 'delivered') {
+            let history = JSON.parse(localStorage.getItem('easygo-order-history') || '[]');
+            history.push(activeOrders[orderIndex]);
+            localStorage.setItem('easygo-order-history', JSON.stringify(history));
+            
+            activeOrders.splice(orderIndex, 1);
+            localStorage.setItem('easygo-active-orders', JSON.stringify(activeOrders));
+        }
+        
+        location.reload();
+    };
 </script>
 </body>
 </html>
