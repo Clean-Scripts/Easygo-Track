@@ -311,30 +311,61 @@
     let updateInterval;
     let orderData = null;
     
-    // ====== SECURITY CHECK ======
+    // ====== FIXED ORDER CHECKING LOGIC ======
     function checkOrderExists() {
         try {
+            // First, check if we have an order ID
             const orderId = localStorage.getItem('easygo-order-id');
             
-            // No order ID at all
+            // If no order ID at all, show empty
             if (!orderId) {
+                console.log("No order ID found");
                 return false;
             }
             
-            // Check if order was delivered or cancelled
+            // Check for any order in localStorage (active orders, delivery orders, or last order)
+            const activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+            const deliveryOrders = JSON.parse(localStorage.getItem('easygo-delivery-orders') || '[]');
+            const lastOrder = JSON.parse(localStorage.getItem('easygo-last-order') || 'null');
+            
+            // Check if order exists in any storage
+            const orderInActive = activeOrders.some(order => order.orderId === orderId);
+            const orderInDelivery = deliveryOrders.some(order => order.orderId === orderId);
+            const lastOrderMatches = lastOrder && lastOrder.id === orderId;
+            
+            // Also check if we have OTP (which means order was created)
+            const otp = localStorage.getItem('easygo-otp');
+            
+            console.log("Order check:", {
+                orderId,
+                orderInActive,
+                orderInDelivery,
+                lastOrderMatches,
+                hasOtp: !!otp,
+                activeOrdersCount: activeOrders.length,
+                deliveryOrdersCount: deliveryOrders.length
+            });
+            
+            // If order exists in any storage OR we have OTP, show tracking
+            if (orderInActive || orderInDelivery || lastOrderMatches || otp) {
+                return true;
+            }
+            
+            // Check delivered/cancelled status
             const delivered = localStorage.getItem('easygo-delivery-completed');
             const cancelled = localStorage.getItem('easygo-order-cancelled');
             
-            // If delivered or cancelled, still show the page
             if (delivered === 'true' || cancelled === 'true') {
                 return true;
             }
             
-            // Check if there's an active order
-            const activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
-            const hasActiveOrder = activeOrders.some(order => order.orderId === orderId);
+            // If we have payment ID, also show tracking (payment was made)
+            const paymentId = localStorage.getItem('easygo-last-payment-id');
+            if (paymentId) {
+                return true;
+            }
             
-            return hasActiveOrder;
+            return false;
             
         } catch (error) {
             console.error("Security check error:", error);
@@ -370,31 +401,53 @@
     
     // ====== LOAD ORDER DATA ======
     function loadOrderData() {
+        console.log("Loading order data...");
+        
         // Check if order exists
         if (!checkOrderExists()) {
+            console.log("No order found, showing empty overlay");
             showEmptyOrderOverlay();
             return;
         }
+        
+        console.log("Order exists, loading data...");
         
         const orderId = localStorage.getItem('easygo-order-id');
         const otp = localStorage.getItem('easygo-otp') || '0';
         deliveryMode = localStorage.getItem('easygo-delivery-mode') || 'takeaway';
         
-        // Load order from localStorage
+        // Load order from various storages
         const orders = JSON.parse(localStorage.getItem('easygo-orders') || '[]');
         const activeOrders = JSON.parse(localStorage.getItem('easygo-active-orders') || '[]');
+        const deliveryOrders = JSON.parse(localStorage.getItem('easygo-delivery-orders') || '[]');
+        const lastOrder = JSON.parse(localStorage.getItem('easygo-last-order') || 'null');
         
+        // Try to find order in different storages
         orderData = orders.find(o => o.id === orderId) || orders[orders.length - 1];
-        const activeOrder = activeOrders.find(o => o.orderId === orderId) || activeOrders[activeOrders.length - 1];
         
-        if (!orderData) {
+        if (!orderData && lastOrder) {
+            orderData = lastOrder;
+        }
+        
+        const activeOrder = activeOrders.find(o => o.orderId === orderId) || activeOrders[activeOrders.length - 1];
+        const deliveryOrder = deliveryOrders.find(o => o.orderId === orderId) || deliveryOrders[deliveryOrders.length - 1];
+        
+        console.log("Found order data:", {
+            orderData: !!orderData,
+            activeOrder: !!activeOrder,
+            deliveryOrder: !!deliveryOrder,
+            otp: otp
+        });
+        
+        if (!orderData && !activeOrder && !deliveryOrder) {
+            console.log("No order data found in any storage");
             showEmptyOrderOverlay();
             return;
         }
         
         // Display order info
         document.getElementById('otp-display').textContent = otp;
-        document.getElementById('order-id-display').textContent = orderId;
+        document.getElementById('order-id-display').textContent = orderId || '--';
         
         // Update UI based on delivery mode
         if (deliveryMode === 'delivery') {
@@ -405,13 +458,20 @@
             document.getElementById('step-pickup').classList.remove('hidden');
         }
         
-        // Check order status
-        if (activeOrder) {
-            updateOrderStatus(activeOrder.status);
+        // Check order status from different sources
+        let status = 'pending';
+        if (activeOrder && activeOrder.status) {
+            status = activeOrder.status;
+        } else if (deliveryOrder && deliveryOrder.status) {
+            status = deliveryOrder.status;
+        } else if (orderData && orderData.status) {
+            status = orderData.status;
         }
         
+        updateOrderStatus(status);
+        
         // Render order summary
-        renderOrderSummary(orderData);
+        renderOrderSummary(orderData || activeOrder || deliveryOrder);
         
         // Check if order was completed
         const delivered = localStorage.getItem('easygo-delivery-completed');
@@ -425,6 +485,15 @@
             // Start checking for updates
             startStatusPolling();
         }
+        
+        // Show success message if just came from payment
+        const justPaid = sessionStorage.getItem('just_paid');
+        if (justPaid === 'true') {
+            setTimeout(() => {
+                alert("✅ Order tracking loaded successfully!\n\nYour order is now being tracked. You'll get real-time updates here.");
+                sessionStorage.removeItem('just_paid');
+            }, 500);
+        }
     }
     
     // ====== UPDATE ORDER STATUS ======
@@ -433,10 +502,12 @@
         
         const statusMap = {
             'pending': { step: 1, badge: 'Order Received - Pending', badgeColor: 'bg-yellow-100 text-yellow-800', badgeIcon: '⏳' },
+            'pending_whatsapp': { step: 1, badge: 'Pending WhatsApp', badgeColor: 'bg-yellow-100 text-yellow-800', badgeIcon: '⏳' },
             'preparing': { step: 2, badge: 'Preparing Your Order', badgeColor: 'bg-blue-100 text-blue-800', badgeIcon: '👨‍🍳' },
             'out-for-delivery': { step: 3, badge: 'Out for Delivery', badgeColor: 'bg-purple-100 text-purple-800', badgeIcon: '🛵' },
             'ready-for-pickup': { step: 3, badge: 'Ready for Pickup', badgeColor: 'bg-orange-100 text-orange-800', badgeIcon: '🏪' },
             'delivered': { step: 5, badge: 'Order Delivered', badgeColor: 'bg-green-100 text-green-800', badgeIcon: '✅' },
+            'confirmed': { step: 1, badge: 'Order Confirmed', badgeColor: 'bg-green-100 text-green-800', badgeIcon: '✅' },
             'cancelled': { step: 0, badge: 'Order Cancelled', badgeColor: 'bg-red-100 text-red-800', badgeIcon: '❌' }
         };
         
@@ -483,10 +554,12 @@
         const etaElement = document.getElementById('eta');
         const etaMap = {
             'pending': '25-30 min',
+            'pending_whatsapp': '25-30 min',
             'preparing': '20-25 min',
             'out-for-delivery': '15-20 min',
             'ready-for-pickup': 'Ready Now',
             'delivered': 'Arrived',
+            'confirmed': '25-30 min',
             'cancelled': 'N/A'
         };
         
@@ -496,17 +569,20 @@
     function addStatusUpdate(status) {
         const updatesContainer = document.getElementById('status-updates');
         const messages = {
+            'pending': { title: 'Order Received', message: 'Order received and waiting for restaurant confirmation', icon: '📦', color: 'bg-yellow-500' },
+            'pending_whatsapp': { title: 'Awaiting WhatsApp Confirmation', message: 'Waiting for customer to send WhatsApp message', icon: '📱', color: 'bg-yellow-500' },
             'preparing': { title: 'Food Preparation Started', message: 'Chef is preparing your delicious food', icon: '👨‍🍳', color: 'bg-blue-500' },
             'out-for-delivery': { title: 'Out for Delivery', message: 'Your order is on the way!', icon: '🛵', color: 'bg-purple-500' },
             'ready-for-pickup': { title: 'Ready for Pickup', message: 'Your order is ready for pickup', icon: '🏪', color: 'bg-orange-500' },
             'delivered': { title: 'Order Delivered', message: 'Your order has been delivered successfully', icon: '✅', color: 'bg-green-500' },
+            'confirmed': { title: 'Payment Confirmed', message: 'Payment received and order confirmed', icon: '✅', color: 'bg-green-500' },
             'cancelled': { title: 'Order Cancelled', message: 'Your order has been cancelled', icon: '❌', color: 'bg-red-500' }
         };
         
-        if (messages[status]) {
-            const message = messages[status];
+        const message = messages[status];
+        if (message && !updatesContainer.querySelector(`[data-status="${status}"]`)) {
             const updateHTML = `
-                <div class="flex items-start gap-4">
+                <div class="flex items-start gap-4" data-status="${status}">
                     <div class="w-8 h-8 rounded-full ${message.color} flex items-center justify-center text-white">
                         ${message.icon}
                     </div>
@@ -531,9 +607,15 @@
     
     function renderOrderSummary(order) {
         const container = document.getElementById('order-summary');
+        
+        if (!order) {
+            container.innerHTML = '<p class="text-gray-500">No order details available</p>';
+            return;
+        }
+        
         let html = '';
         
-        if (order && order.items) {
+        if (order.items) {
             order.items.forEach(item => {
                 html += `
                     <div class="flex justify-between items-center">
@@ -541,15 +623,22 @@
                             <p class="font-medium">${item.name}</p>
                             <p class="text-sm text-gray-600">${item.quantity} × ${getPackName(item.pack)}</p>
                         </div>
-                        <span class="font-bold">₹${parseFloat(item.total).toFixed(2)}</span>
+                        <span class="font-bold">₹${parseFloat(item.total || item.totalPrice || 0).toFixed(2)}</span>
                     </div>
                 `;
             });
             
-            const foodTotal = order.totals?.foodTotal || order.amount;
-            const gstFood = order.totals?.gstFood || 0;
+            const foodTotal = order.totals?.foodTotal || (() => {
+                let total = 0;
+                order.items?.forEach(item => {
+                    total += parseFloat(item.total || item.totalPrice || 0);
+                });
+                return total;
+            })();
+            
+            const gstFood = order.totals?.gstFood || (foodTotal * 0.05);
             const deliveryCharge = order.totals?.deliveryCharge || 0;
-            const gstDelivery = order.totals?.gstDelivery || 0;
+            const gstDelivery = order.totals?.gstDelivery || (deliveryCharge * 0.18);
             const total = order.amount || (foodTotal + gstFood + deliveryCharge + gstDelivery);
             
             html += `
@@ -604,7 +693,7 @@
             clearInterval(updateInterval);
         }
         
-        updateInterval = setInterval(checkForStatusUpdates, 3000); // Check every 3 seconds
+        updateInterval = setInterval(checkForStatusUpdates, 3000);
     }
     
     function checkForStatusUpdates() {
@@ -682,6 +771,14 @@
     
     // ====== INITIALIZE PAGE ======
     document.addEventListener('DOMContentLoaded', function() {
+        console.log("Track page loaded");
+        
+        // Set flag for just paid
+        const referrer = document.referrer;
+        if (referrer.includes('Easygo-Payment')) {
+            sessionStorage.setItem('just_paid', 'true');
+        }
+        
         // Load order data after a short delay to ensure DOM is ready
         setTimeout(loadOrderData, 100);
         
