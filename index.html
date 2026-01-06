@@ -115,6 +115,47 @@
     </style>
 </head>
 <body class="antialiased bg-gray-100 min-h-screen">
+        <script>
+            // Universal check for all pages
+            const cartItems = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+            
+            // Only redirect if cart is completely empty
+            if (cartItems.length === 0) {
+                // Show simple message
+                document.body.innerHTML = `
+                    <div style="
+                        height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex-direction: column;
+                        padding: 20px;
+                        text-align: center;
+                        font-family: system-ui, -apple-system, sans-serif;
+                    ">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🛒</div>
+                        <h2 style="margin-bottom: 10px; color: #333;">Your cart is empty</h2>
+                        <p style="color: #666; margin-bottom: 30px;">Redirecting to menu...</p>
+                        <div style="width: 200px; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
+                            <div style="height: 100%; background: #10b981; width: 0%; transition: width 2s linear;"></div>
+                        </div>
+                    </div>
+                `;
+                
+                // Animate progress bar
+                setTimeout(() => {
+                    document.querySelector('div[style*="width: 0%"]').style.width = '100%';
+                }, 100);
+                
+                // Redirect after 2 seconds
+                setTimeout(() => {
+                    window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+                }, 2000);
+                    }
+        </script>
+
+
+    
 
     <!-- Firebase Status Indicator -->
     <div id="firebaseStatus" class="firebase-status hidden">
