@@ -96,16 +96,6 @@
             z-index: 1;
         }
         
-        /* Waiting Timer */
-        .waiting-timer {
-            animation: pulse-red 1s infinite;
-        }
-        
-        @keyframes pulse-red {
-            0%, 100% { background-color: #fee2e2; }
-            50% { background-color: #fecaca; }
-        }
-        
         /* Enhanced status badges */
         .badge-pending { background: #fef3c7; color: #92400e; }
         .badge-confirmed { background: #dbeafe; color: #1e40af; }
@@ -124,6 +114,21 @@
             0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
             100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        
+        /* Loading Animation */
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -171,7 +176,7 @@
         <div class="mb-8 text-center">
             <div id="order-status-badge" class="inline-flex items-center gap-2 px-6 py-3 bg-yellow-100 text-yellow-800 rounded-full">
                 <span class="text-xl">⏳</span>
-                <span class="font-bold">Order Received - Pending</span>
+                <span class="font-bold">Checking Order Status...</span>
             </div>
             <p class="text-sm text-gray-500 mt-2">Order ID: <span id="order-id-display" class="font-bold">--</span></p>
         </div>
@@ -191,7 +196,7 @@
                     ⏰
                 </div>
                 <p class="font-bold">Restaurant</p>
-                <p class="text-sm">Waiting 2 mins...</p>
+                <p class="text-sm">Waiting...</p>
             </div>
             
             <div id="step-3" class="tracking-step flex flex-col items-center p-6 rounded-2xl mb-4 md:mb-0">
@@ -253,7 +258,10 @@
                     <h2 class="text-2xl font-bold mb-6">📋 Order Details</h2>
                     
                     <div id="order-summary" class="space-y-4 mb-6">
-                        <!-- Order summary loaded from Firebase -->
+                        <div class="flex items-center justify-center py-8">
+                            <div class="loading-spinner"></div>
+                            <span class="ml-3 text-gray-600">Loading order details...</span>
+                        </div>
                     </div>
                     
                     <!-- OTP Section -->
@@ -279,7 +287,10 @@
                 <div class="bg-white rounded-3xl shadow-lg p-8">
                     <h2 class="text-2xl font-bold mb-6">👤 Your Details</h2>
                     <div id="customer-details" class="space-y-4">
-                        <!-- Customer details loaded from Firebase -->
+                        <div class="flex items-center">
+                            <div class="loading-spinner"></div>
+                            <span class="ml-3 text-gray-600">Loading customer details...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -294,11 +305,8 @@
                     <div id="map" class="relative">
                         <div class="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl z-0" id="map-loading">
                             <div class="text-center p-4">
-                                <div class="flex items-center justify-center mb-4">
-                                    <img src="https://raw.githubusercontent.com/Clean-Scripts/EasyGo-Expense-Tracker/refs/heads/main/logo.png" 
-                                         class="h-16 w-16 rounded-full bg-white p-2 shadow-lg">
-                                </div>
-                                <p class="text-xl font-bold mb-2">Live Tracking Loading...</p>
+                                <div class="loading-spinner mx-auto mb-4"></div>
+                                <p class="text-xl font-bold mb-2">Loading Live Tracking...</p>
                                 <p class="mb-4">Real-time rider location will appear here</p>
                             </div>
                         </div>
@@ -375,7 +383,10 @@
                 <div class="bg-white rounded-3xl shadow-lg p-8">
                     <h2 class="text-2xl font-bold mb-6">🔄 Real-time Updates</h2>
                     <div id="status-updates" class="space-y-4 max-h-96 overflow-y-auto">
-                        <!-- Real-time updates from Firebase -->
+                        <div class="flex items-center">
+                            <div class="loading-spinner"></div>
+                            <span class="ml-3 text-gray-600">Waiting for updates...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -518,7 +529,6 @@
                     isFirebaseConnected = true;
                     statusElement.textContent = "✅ Connected to Database";
                     statusElement.className = "firebase-status bg-green-500 text-white";
-                    console.log("Firebase connected - Real-time updates active");
                     
                     // Hide status after 3 seconds
                     setTimeout(() => {
@@ -546,16 +556,16 @@
 
     // ==================== ORDER DATA FUNCTIONS ====================
     function getOrderIdFromLocalStorage() {
-        // First check localStorage for order ID
-        const orderId = localStorage.getItem('easygo-order-id');
-        
-        // If no order ID, try to get from URL parameters
-        if (!orderId) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const orderParam = urlParams.get('order');
-            return orderParam || null;
+        // First check URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderParam = urlParams.get('order');
+        if (orderParam) {
+            localStorage.setItem('easygo-order-id', orderParam);
+            return orderParam;
         }
         
+        // Then check localStorage for order ID
+        const orderId = localStorage.getItem('easygo-order-id');
         return orderId;
     }
 
@@ -584,7 +594,6 @@
                 // Save to localStorage for backup
                 localStorage.setItem('easygo-last-order', JSON.stringify(orderData));
                 
-                console.log("Real-time update received:", orderData.status);
             } else {
                 // Order not found in Firebase
                 showEmptyOrderOverlay();
@@ -600,7 +609,7 @@
     function initMap(orderData) {
         if (!map) {
             // Initialize map centered on restaurant
-            map = L.map('map').setView([RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng], 13);
+            map = L.map('map').setView([RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng], 15);
             
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -624,19 +633,6 @@
         if (orderData.riderLocation) {
             updateRiderLocation(orderData.riderLocation.lat, orderData.riderLocation.lng);
         }
-        
-        // Add customer marker for delivery orders
-        if (orderData.deliveryMode === 'delivery' && orderData.customerLocation) {
-            L.marker([orderData.customerLocation.lat, orderData.customerLocation.lng])
-                .addTo(map)
-                .bindPopup('<b>Delivery Location</b><br>📍 Your Address')
-                .openPopup();
-            
-            // Add route from restaurant to customer
-            if (orderData.riderLocation) {
-                updateRoute(orderData.riderLocation, orderData.customerLocation);
-            }
-        }
     }
 
     function updateRiderLocation(lat, lng) {
@@ -655,31 +651,6 @@
         } else {
             riderMarker.setLatLng([lat, lng]);
         }
-        
-        // Center map on rider if they're moving
-        if (orderData.status === 'out-for-delivery') {
-            map.setView([lat, lng], 14);
-        }
-    }
-
-    function updateRoute(riderLocation, customerLocation) {
-        if (!map) return;
-        
-        // Remove existing route
-        if (routePolyline) {
-            map.removeLayer(routePolyline);
-        }
-        
-        // Create new route line
-        routePolyline = L.polyline([
-            [riderLocation.lat, riderLocation.lng],
-            [customerLocation.lat, customerLocation.lng]
-        ], {
-            color: '#3b82f6',
-            weight: 3,
-            opacity: 0.7,
-            dashArray: '10, 10'
-        }).addTo(map);
     }
 
     // ==================== RESTAURANT ACCEPTANCE TIMER ====================
@@ -758,7 +729,7 @@
         }
         
         // Update status and tracking steps
-        updateOrderStatus(orderData.status);
+        updateOrderStatus(orderData.status, orderData);
         
         // Add status update to timeline
         addStatusUpdate(orderData);
@@ -809,38 +780,42 @@
     }
 
     function updateDeliveryTimeline(orderData) {
-        document.getElementById('delivery-timeline').classList.remove('hidden');
-        
-        // Update timeline times
-        if (orderData.deliveryAssignedAt) {
-            document.getElementById('rider-assigned-time').textContent = 
-                new Date(orderData.deliveryAssignedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
-        
-        if (orderData.riderArrivedAt) {
-            document.getElementById('arrived-restaurant-time').textContent = 
-                new Date(orderData.riderArrivedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            document.querySelector('#delivery-timeline .flex:nth-child(2) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
-            document.querySelector('#delivery-timeline .flex:nth-child(2) span').classList.replace('text-gray-400', 'text-green-600');
+        if (orderData.deliveryMode === 'delivery') {
+            document.getElementById('delivery-timeline').classList.remove('hidden');
             
-            // Show waiting charges info if waiting time exceeded
-            if (orderData.waitingBonus && orderData.waitingBonus > 0) {
-                document.getElementById('waiting-charges-info').classList.remove('hidden');
+            // Update timeline times
+            if (orderData.deliveryAssignedAt) {
+                document.getElementById('rider-assigned-time').textContent = 
+                    new Date(orderData.deliveryAssignedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                document.querySelector('#delivery-timeline .flex:nth-child(1) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
+                document.querySelector('#delivery-timeline .flex:nth-child(1) span').classList.replace('text-gray-400', 'text-green-600');
             }
-        }
-        
-        if (orderData.pickedUpAt) {
-            document.getElementById('picked-up-time').textContent = 
-                new Date(orderData.pickedUpAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            document.querySelector('#delivery-timeline .flex:nth-child(3) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
-            document.querySelector('#delivery-timeline .flex:nth-child(3) span').classList.replace('text-gray-400', 'text-green-600');
-        }
-        
-        if (orderData.riderArrivedCustomerAt) {
-            document.getElementById('arrived-customer-time').textContent = 
-                new Date(orderData.riderArrivedCustomerAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            document.querySelector('#delivery-timeline .flex:nth-child(4) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
-            document.querySelector('#delivery-timeline .flex:nth-child(4) span').classList.replace('text-gray-400', 'text-green-600');
+            
+            if (orderData.riderArrivedAt) {
+                document.getElementById('arrived-restaurant-time').textContent = 
+                    new Date(orderData.riderArrivedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                document.querySelector('#delivery-timeline .flex:nth-child(2) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
+                document.querySelector('#delivery-timeline .flex:nth-child(2) span').classList.replace('text-gray-400', 'text-green-600');
+                
+                // Show waiting charges info if waiting time exceeded
+                if (orderData.waitingBonus && orderData.waitingBonus > 0) {
+                    document.getElementById('waiting-charges-info').classList.remove('hidden');
+                }
+            }
+            
+            if (orderData.pickedUpAt) {
+                document.getElementById('picked-up-time').textContent = 
+                    new Date(orderData.pickedUpAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                document.querySelector('#delivery-timeline .flex:nth-child(3) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
+                document.querySelector('#delivery-timeline .flex:nth-child(3) span').classList.replace('text-gray-400', 'text-green-600');
+            }
+            
+            if (orderData.riderArrivedCustomerAt) {
+                document.getElementById('arrived-customer-time').textContent = 
+                    new Date(orderData.riderArrivedCustomerAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                document.querySelector('#delivery-timeline .flex:nth-child(4) .w-8').classList.replace('bg-gray-100', 'bg-green-100');
+                document.querySelector('#delivery-timeline .flex:nth-child(4) span').classList.replace('text-gray-400', 'text-green-600');
+            }
         }
     }
 
@@ -852,7 +827,7 @@
         }
     }
 
-    function updateOrderStatus(status) {
+    function updateOrderStatus(status, orderData) {
         const statusMap = {
             'pending': { 
                 step: 1, 
@@ -877,7 +852,7 @@
             },
             'ready': { 
                 step: 4, 
-                badge: 'Ready for Pickup/Delivery', 
+                badge: orderData.deliveryMode === 'delivery' ? 'Ready for Delivery' : 'Ready for Pickup',
                 badgeColor: 'badge-ready', 
                 badgeIcon: '✅',
                 eta: orderData.deliveryMode === 'delivery' ? 'Finding rider...' : 'Ready Now'
@@ -911,9 +886,6 @@
         const badge = document.getElementById('order-status-badge');
         badge.className = `inline-flex items-center gap-2 px-6 py-3 ${statusInfo.badgeColor} rounded-full`;
         badge.innerHTML = `<span class="text-xl">${statusInfo.badgeIcon}</span><span class="font-bold">${statusInfo.badge}</span>`;
-        
-        // Update ETA
-        document.getElementById('eta').textContent = statusInfo.eta;
         
         // Update tracking steps
         updateTrackingSteps(statusInfo.step, status);
@@ -957,13 +929,16 @@
 
     function updateOrderSummary(orderData) {
         const container = document.getElementById('order-summary');
-        let html = '';
         
         if (orderData.items && orderData.items.length > 0) {
+            let html = '';
+            let subtotal = 0;
+            
             orderData.items.forEach(item => {
                 const quantity = parseInt(item.quantity) || 1;
                 const unitPrice = parseFloat(item.unitPrice) || 0;
                 const totalPrice = unitPrice * quantity;
+                subtotal += totalPrice;
                 
                 html += `
                     <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -979,27 +954,29 @@
                 `;
             });
             
-            const total = orderData.totalAmount || orderData.amount || 0;
+            const total = parseFloat(orderData.totalAmount) || subtotal;
             const deliveryCharge = orderData.deliveryCharge || (orderData.deliveryMode === 'delivery' ? 49 : 0);
             const platformFee = total * 0.05;
             const gstOnPlatform = platformFee * 0.18;
             
             html += `
                 <div class="border-t pt-4 mt-4 space-y-2">
+                    <div class="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>₹${subtotal.toFixed(2)}</span>
+                    </div>
                     ${orderData.deliveryMode === 'delivery' ? `
-                        <div class="flex justify-between">
-                            <span>Subtotal:</span>
-                            <span>₹${(total - deliveryCharge - platformFee - gstOnPlatform).toFixed(2)}</span>
-                        </div>
                         <div class="flex justify-between">
                             <span>Delivery Charge:</span>
                             <span>₹${deliveryCharge.toFixed(2)}</span>
                         </div>
-                        <div class="flex justify-between">
+                    ` : ''}
+                    ${orderData.deliveryMode === 'delivery' ? `
+                        <div class="flex justify-between text-sm text-gray-500">
                             <span>Platform Fee (5%):</span>
                             <span>₹${platformFee.toFixed(2)}</span>
                         </div>
-                        <div class="flex justify-between">
+                        <div class="flex justify-between text-sm text-gray-500">
                             <span>GST on Platform (18%):</span>
                             <span>₹${gstOnPlatform.toFixed(2)}</span>
                         </div>
@@ -1010,15 +987,15 @@
                     ` : ''}
                     <div class="flex justify-between items-center pt-3 border-t">
                         <span class="font-bold text-lg">Total Amount</span>
-                        <span class="font-bold text-2xl text-green-600">₹${parseFloat(total).toFixed(2)}</span>
+                        <span class="font-bold text-2xl text-green-600">₹${total.toFixed(2)}</span>
                     </div>
                 </div>
             `;
+            
+            container.innerHTML = html;
         } else {
-            html = '<p class="text-gray-500">Loading order details...</p>';
+            container.innerHTML = '<p class="text-gray-500">No order items found</p>';
         }
-        
-        container.innerHTML = html;
     }
 
     function updateCustomerDetails(orderData) {
@@ -1061,6 +1038,11 @@
         const status = orderData.status;
         const timestamp = orderData.lastUpdated || Date.now();
         
+        // Clear loading message
+        if (updatesContainer.querySelector('.loading-spinner')) {
+            updatesContainer.innerHTML = '';
+        }
+        
         const messages = {
             'pending': { 
                 title: 'Order Received', 
@@ -1095,24 +1077,6 @@
                     'Delivery partner assigned and on the way', 
                 icon: '🛵', 
                 color: 'bg-purple-500' 
-            },
-            'rider_arrived_restaurant': { 
-                title: 'Rider Arrived at Restaurant', 
-                message: 'Delivery partner has arrived at restaurant', 
-                icon: '🏪', 
-                color: 'bg-blue-500' 
-            },
-            'rider_picked_up': { 
-                title: 'Order Picked Up', 
-                message: 'Delivery partner has picked up your order', 
-                icon: '📦', 
-                color: 'bg-green-500' 
-            },
-            'rider_arrived_customer': { 
-                title: 'Rider Arrived at Your Location', 
-                message: 'Delivery partner has arrived. Please provide OTP for delivery', 
-                icon: '📍', 
-                color: 'bg-orange-500' 
             },
             'delivered': { 
                 title: 'Order Delivered', 
@@ -1165,48 +1129,6 @@
                 }
             }
         }
-        
-        // Add rider specific updates
-        if (orderData.riderArrivedAt) {
-            addRiderUpdate('Rider Arrived at Restaurant', orderData.riderArrivedAt, '🏪');
-        }
-        if (orderData.pickedUpAt) {
-            addRiderUpdate('Order Picked Up by Rider', orderData.pickedUpAt, '📦');
-        }
-        if (orderData.riderArrivedCustomerAt) {
-            addRiderUpdate('Rider Arrived at Your Location', orderData.riderArrivedCustomerAt, '📍');
-        }
-    }
-
-    function addRiderUpdate(title, timestamp, icon) {
-        const updatesContainer = document.getElementById('status-updates');
-        const time = new Date(timestamp).toLocaleTimeString('en-IN', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
-        
-        const updateHTML = `
-            <div class="status-entry flex items-start gap-4">
-                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                    ${icon}
-                </div>
-                <div>
-                    <p class="font-bold">${title}</p>
-                    <p class="text-sm text-gray-600">${icon === '📍' ? 'Please provide OTP for delivery' : 'Delivery in progress'}</p>
-                    <p class="text-xs text-gray-500">${time}</p>
-                </div>
-            </div>
-        `;
-        
-        // Check if already exists
-        const existingUpdates = updatesContainer.querySelectorAll('.status-entry');
-        const alreadyExists = Array.from(existingUpdates).some(update => 
-            update.textContent.includes(title)
-        );
-        
-        if (!alreadyExists) {
-            updatesContainer.insertAdjacentHTML('afterbegin', updateHTML);
-        }
     }
 
     function getPackName(pack) {
@@ -1222,7 +1144,7 @@
     function showNotification(message) {
         // Create a simple notification
         const notification = document.createElement('div');
-        notification.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-lg z-50 animate-bounce';
+        notification.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-lg z-50';
         notification.textContent = message;
         
         document.body.appendChild(notification);
@@ -1303,42 +1225,45 @@
     document.addEventListener('DOMContentLoaded', function() {
         console.log('EasyGo Track Page - Loading...');
         
-        // Add cart check
-        const cartItems = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+        // Get order ID
         const orderId = getOrderIdFromLocalStorage();
         
-        // Only redirect if cart is completely empty AND no order ID
-        if (cartItems.length === 0 && !orderId) {
-            document.body.innerHTML = `
-                <div style="
-                    height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    flex-direction: column;
-                    padding: 20px;
-                    text-align: center;
-                    font-family: system-ui, -apple-system, sans-serif;
-                ">
-                    <div style="font-size: 48px; margin-bottom: 20px;">🛒</div>
-                    <h2 style="margin-bottom: 10px; color: #333;">Your cart is empty</h2>
-                    <p style="color: #666; margin-bottom: 30px;">Redirecting to menu...</p>
-                    <div style="width: 200px; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
-                        <div style="height: 100%; background: #10b981; width: 0%; transition: width 2s linear;"></div>
+        // Check if we have an order ID
+        if (!orderId) {
+            // Check for empty cart only if no order ID
+            const cartItems = JSON.parse(localStorage.getItem('easygo-cart')) || [];
+            if (cartItems.length === 0) {
+                document.body.innerHTML = `
+                    <div style="
+                        height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex-direction: column;
+                        padding: 20px;
+                        text-align: center;
+                        font-family: system-ui, -apple-system, sans-serif;
+                    ">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🛒</div>
+                        <h2 style="margin-bottom: 10px; color: #333;">Your cart is empty</h2>
+                        <p style="color: #666; margin-bottom: 30px;">Redirecting to menu...</p>
+                        <div style="width: 200px; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
+                            <div style="height: 100%; background: #10b981; width: 0%; transition: width 2s linear;"></div>
+                        </div>
                     </div>
-                </div>
-            `;
-            
-            // Animate progress bar
-            setTimeout(() => {
-                document.querySelector('div[style*="width: 0%"]').style.width = '100%';
-            }, 100);
-            
-            // Redirect after 2 seconds
-            setTimeout(() => {
-                window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
-            }, 2000);
-            return;
+                `;
+                
+                // Animate progress bar
+                setTimeout(() => {
+                    document.querySelector('div[style*="width: 0%"]').style.width = '100%';
+                }, 100);
+                
+                // Redirect after 2 seconds
+                setTimeout(() => {
+                    window.location.href = 'https://clean-scripts.github.io/Easygo-Menu/';
+                }, 2000);
+                return;
+            }
         }
         
         // Initialize Firebase
@@ -1359,13 +1284,6 @@
                 loadOrderDataFromLocalStorage();
             }
         }, 3000);
-        
-        // Add refresh button (for debugging)
-        const refreshBtn = document.createElement('button');
-        refreshBtn.innerHTML = '🔄 Refresh';
-        refreshBtn.className = 'fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-600 transition z-40';
-        refreshBtn.onclick = () => location.reload();
-        document.body.appendChild(refreshBtn);
     });
 
     function loadOrderData() {
@@ -1378,6 +1296,9 @@
         }
         
         console.log('Loading order:', orderId);
+        
+        // Show order ID immediately
+        document.getElementById('order-id-display').textContent = orderId;
         
         // Setup real-time listener
         const listenerSet = setupOrderListener(orderId);
